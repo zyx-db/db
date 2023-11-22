@@ -1,3 +1,4 @@
+pub mod eviction;
 use std::{collections::HashMap, sync::{Arc, RwLock, Mutex, RwLockWriteGuard}};
 use super::utils::bitmap::Bitmap;
 // What does our interface need?
@@ -21,13 +22,9 @@ pub struct Pool {
     cache: Mutex<HashMap<ID, usize>>,
     frames: Vec<RwLock<Page>>,
     dirty: Mutex<Bitmap>,
+    free: Mutex<Bitmap>,
     pinned: Vec<Mutex<u8>>,
-    strategy: Box<Mutex<dyn EvictionStrategy>>,
-}
-
-pub trait EvictionStrategy {
-    fn update_entry(&mut self, entry_id: ID);
-    fn find_victim(&mut self, pool: &Pool) -> (RwLockWriteGuard<Page>, ID);
+    strategy: Mutex<Box<dyn EvictionStrategy>>,
 }
 
 pub type Page = [u8; 4096];
@@ -38,9 +35,14 @@ pub struct PageGuard<'a> {
     pool_idx: usize,
 }
 
+pub trait EvictionStrategy {
+    fn update_entry(&mut self, entry_id: ID);
+    fn find_victim<'a>(&'a mut self, pool: &'a Pool) -> (RwLockWriteGuard<Page>, ID);
+}
+
 impl Pool {
     // we need to init bitmaps, cache, and choose eviction strategy
-    pub fn new(capacity: usize, strategy: Box<Mutex<dyn EvictionStrategy>>) -> Self {
+    pub fn new(capacity: usize, strategy: Mutex<Box<dyn EvictionStrategy>>) -> Self {
         let mut frames = Vec::new();
         let mut pinned = Vec::new();
         for _ in 0..capacity {
@@ -51,12 +53,13 @@ impl Pool {
             cache: Mutex::new(HashMap::new()),
             frames,
             dirty: Mutex::new(Bitmap::with_capacity(capacity)),
+            free: Mutex::new(Bitmap::with_capacity(capacity)),
             pinned,
             strategy
         }
     }
     
-    pub fn get_page(&mut self, page: ID) -> PageGuard{
+    pub fn get_page(&self, page: ID) -> PageGuard{
         let idx = {
             let cache = self.cache.lock().unwrap();
             if cache.contains_key(&page) {
@@ -72,7 +75,7 @@ impl Pool {
 
     // TODO: WE DON'T CURRENTLY FLUSH DIRTY PAGE TO DISK
     // returns what slot is now empty
-    fn replace_entry(&mut self, new_page_id: ID) -> usize {
+    fn replace_entry(&self, new_page_id: ID) -> usize {
         // we start by finding the page to remove, and acquire a write lock on it
         let mut strat = self.strategy.lock().unwrap();
         let (mut victim_guard, page_id) = strat.find_victim(self);
@@ -137,3 +140,6 @@ impl<'a> Drop for PageGuard<'a> {
         drop(pin_count);
     }
 }
+
+unsafe impl Send for Pool {}
+unsafe impl Sync for Pool {}

@@ -1,13 +1,16 @@
 mod bufferpool;
 mod utils;
-use std::{thread::{self, sleep}, sync::Arc, time::Duration};
+use std::{thread::{self}, sync::{Arc, Mutex}};
+
+use bufferpool::eviction;
 
 use crate::bufferpool::{Pool, EvictionStrategy, Page};
 
 fn main() {
-    let pool = Arc::new(Pool::new(2, EvictionStrategy::LruK));
+    let strat: Mutex<Box<dyn EvictionStrategy>> = Mutex::new(Box::new(bufferpool::eviction::LruK::new(2, 2)));
+    let pool = Arc::new(Pool::new(2, strat));
     let mut threads = Vec::new();
-    for i in 1..11 {
+    for i in 1..2 {
         let pool_clone = Arc::clone(&pool);
         let handle = thread::spawn(move || {
             let guard = pool_clone.get_page(0);
