@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::{Arc, RwLock, Mutex}};
+use std::{collections::HashMap, sync::{Arc, RwLock, Mutex, RwLockWriteGuard}};
 use super::utils::bitmap::Bitmap;
 // What does our interface need?
 // we must be able to 
@@ -12,6 +12,8 @@ use super::utils::bitmap::Bitmap;
 // We must also implement some sort of cache eviction strategy
 // ideally i should implement this using composition, 
 // such that our pool contains a "eviction" strategy object that tracks usages
+//
+// TODO: create lock ordering to prevent silly mistakes 
 
 type ID = u32; 
 pub struct Pool {
@@ -20,24 +22,15 @@ pub struct Pool {
     frames: Vec<RwLock<Page>>,
     dirty: Mutex<Bitmap>,
     pinned: Vec<Mutex<u8>>,
-    strategy: EvictionStrategy,
+    strategy: Box<Mutex<dyn EvictionStrategy>>,
 }
 
-// is it unavoidable to use a trait for this interface?
-pub enum EvictionStrategy {
-    LruK,
-    Clock,
+pub trait EvictionStrategy {
+    fn update_entry(&mut self, entry_id: ID);
+    fn find_victim(&mut self, pool: &Pool) -> (RwLockWriteGuard<Page>, ID);
 }
 
-pub struct Page {
-    data: [u8; 4096],
-}
-
-impl Page {
-    pub fn new() -> Self {
-        return Page { data: [0; 4096] }
-    }
-}
+pub type Page = [u8; 4096];
 
 pub struct PageGuard<'a> {
     data: &'a Pool,
@@ -47,11 +40,11 @@ pub struct PageGuard<'a> {
 
 impl Pool {
     // we need to init bitmaps, cache, and choose eviction strategy
-    pub fn new(capacity: usize, strategy: EvictionStrategy) -> Self {
+    pub fn new(capacity: usize, strategy: Box<Mutex<dyn EvictionStrategy>>) -> Self {
         let mut frames = Vec::new();
         let mut pinned = Vec::new();
         for _ in 0..capacity {
-            frames.push(RwLock::new(Page::new()));
+            frames.push(RwLock::new([0; 4096]));
             pinned.push(Mutex::new(0 as u8));
         }
         Pool { 
@@ -63,23 +56,41 @@ impl Pool {
         }
     }
     
-    pub fn get_page(&self, page: ID) -> PageGuard{
+    pub fn get_page(&mut self, page: ID) -> PageGuard{
         let idx = {
             let cache = self.cache.lock().unwrap();
             if cache.contains_key(&page) {
                 *cache.get(&page).unwrap()
             }
             else {
-                // TODO:
-                // evict unpinned page,
-                // remove that page from cache
-                // read data from disk
-                // move new page into cache
-                // return correct idx
-                1 as usize
+                drop(cache);
+                self.replace_entry(page)
             }
         };
         PageGuard::new(self, page, idx)
+    }
+
+    // TODO: WE DON'T CURRENTLY FLUSH DIRTY PAGE TO DISK
+    // returns what slot is now empty
+    fn replace_entry(&mut self, new_page_id: ID) -> usize {
+        // we start by finding the page to remove, and acquire a write lock on it
+        let mut strat = self.strategy.lock().unwrap();
+        let (mut victim_guard, page_id) = strat.find_victim(self);
+        // we also lock the cache, so we can modify it safely
+        let mut cache = self.cache.lock().unwrap();
+        // update the entry, removing old key and adding new one
+        let idx = cache.remove(&page_id).unwrap();
+        cache.insert(new_page_id, idx);
+        
+        // replace frame here
+        // TODO: THIS IS WHERE WE MUST FLUSH CHANGES TO DISK
+        // let new_frame: Page = FILE_IO();
+        let new_frame = [4; 4096];
+        *victim_guard = new_frame;
+
+        drop(victim_guard);
+        drop(cache);
+        idx
     }
 }
 
@@ -89,10 +100,29 @@ impl<'a> PageGuard<'a> {
         let mut pin_count = pool.pinned[pool_idx].lock().unwrap();
         *pin_count += 1;
         // currently printing for debugging
-        println!("picked up page {}, pin is {}", page_id, *pin_count);
+        // println!("picked up page {}, pin is {}", page_id, *pin_count);
         drop(pin_count);
 
         PageGuard { data: pool, page_id, pool_idx }
+    }
+
+    pub fn read(&self) -> Page {
+        // return a clone of the data, after acquiring read permission
+        let data = self.data.frames[self.pool_idx].read().unwrap();
+        let res = data.clone();
+        drop(data);
+
+        return res;
+    }
+
+    pub fn write(&self) -> RwLockWriteGuard<Page> {
+        // we need to acquire locks on the data and dirty bitmap
+        // we update the data and drop these mutexes
+        let mut dirty_map = self.data.dirty.lock().unwrap();
+        let frame_data = self.data.frames[self.pool_idx].write().unwrap();
+        dirty_map.set(self.pool_idx);
+        drop(dirty_map);
+        frame_data
     }
 }
 
@@ -103,7 +133,7 @@ impl<'a> Drop for PageGuard<'a> {
         let mut pin_count = self.data.pinned[idx].lock().unwrap();
         *pin_count -= 1;
         // currently printing for debugging
-        println!("dropped page {}, pin is {}", self.page_id, *pin_count);
+        // println!("dropped page {}, pin is {}", self.page_id, *pin_count);
         drop(pin_count);
     }
 }
