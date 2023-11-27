@@ -21,8 +21,8 @@ pub struct Pool {
     // our buffer pool can use a map to track cached pages, and its frame in memory
     cache: Mutex<HashMap<ID, usize>>,
     frames: Vec<RwLock<Page>>,
+    frame_to_id: Vec<ID>,
     dirty: Mutex<Bitmap>,
-    free: Mutex<Bitmap>,
     pinned: Vec<Mutex<u8>>,
     strategy: Mutex<Box<dyn EvictionStrategy>>,
 }
@@ -36,24 +36,27 @@ pub struct PageGuard<'a> {
 }
 
 pub trait EvictionStrategy {
-    fn update_entry(&mut self, entry_id: ID);
-    fn find_victim<'a>(&'a mut self, pool: &'a Pool) -> (RwLockWriteGuard<Page>, ID);
+    fn update_entry(&mut self, frame: usize);
+    fn find_victim<'a>(&'a mut self, pool: &'a Pool) -> (RwLockWriteGuard<Page>, usize);
 }
 
 impl Pool {
     // we need to init bitmaps, cache, and choose eviction strategy
     pub fn new(capacity: usize, strategy: Mutex<Box<dyn EvictionStrategy>>) -> Self {
-        let mut frames = Vec::new();
-        let mut pinned = Vec::new();
+        let mut frames = Vec::with_capacity(capacity);
+        let mut pinned = Vec::with_capacity(capacity);
+        let mut frame_to_id = Vec::with_capacity(capacity);
         for _ in 0..capacity {
-            frames.push(RwLock::new([0; 4096]));
+            frames.push(RwLock::new([10; 4096]));
             pinned.push(Mutex::new(0 as u8));
+            frame_to_id.push(0);
         }
         Pool { 
             cache: Mutex::new(HashMap::new()),
             frames,
             dirty: Mutex::new(Bitmap::with_capacity(capacity)),
-            free: Mutex::new(Bitmap::with_capacity(capacity)),
+            frame_to_id,
+            // free: Mutex::new(Bitmap::with_capacity(capacity)),
             pinned,
             strategy
         }
@@ -78,22 +81,21 @@ impl Pool {
     fn replace_entry(&self, new_page_id: ID) -> usize {
         // we start by finding the page to remove, and acquire a write lock on it
         let mut strat = self.strategy.lock().unwrap();
-        let (mut victim_guard, page_id) = strat.find_victim(self);
+        let (mut victim_guard, frame) = strat.find_victim(self);
         // we also lock the cache, so we can modify it safely
         let mut cache = self.cache.lock().unwrap();
         // update the entry, removing old key and adding new one
-        let idx = cache.remove(&page_id).unwrap();
-        cache.insert(new_page_id, idx);
+        cache.insert(new_page_id, frame);
         
         // replace frame here
         // TODO: THIS IS WHERE WE MUST FLUSH CHANGES TO DISK
         // let new_frame: Page = FILE_IO();
-        let new_frame = [4; 4096];
+        let new_frame = [0; 4096];
         *victim_guard = new_frame;
 
         drop(victim_guard);
         drop(cache);
-        idx
+        frame
     }
 }
 

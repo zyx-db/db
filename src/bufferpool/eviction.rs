@@ -6,73 +6,57 @@ use std::sync::RwLockWriteGuard;
 type Page = [u8; 4096];
 type ID = u32;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct TimeRingBuffer {
-    page_id: ID,
+    frame: usize,
     head: usize,
     times: Vec<u128>,
 }
 
 pub struct LruK {
     heap: BinaryHeap<TimeRingBuffer>,
-    current_pages: HashSet<ID>,
     buffer_size: usize,
     k: usize,
 }
 
 impl EvictionStrategy for LruK {
-    fn update_entry(&mut self, entry_id: super::ID) {
+    fn update_entry(&mut self, frame: usize) {
         let current_time = SystemTime::now();
         // Calculate the duration since the Unix epoch
         let duration_since_epoch = current_time.duration_since(UNIX_EPOCH).expect("Time went backwards");
         // Convert the duration to milliseconds
         let milliseconds_since_epoch = duration_since_epoch.as_millis();
 
-        // we have the this page, lets find the entry
+        // we have the this frame, lets find the entry
         // from there we can create a new, updated entry
         // we have to remove old entry, and insert new one
-        if self.current_pages.contains(&entry_id){
-            let copy = self.heap
-                .iter()
-                .find(|x| x.page_id == entry_id)
-                .map(|s| s.clone())
-                .unwrap();
+        let copy = self.heap
+            .iter()
+            .find(|x| x.frame == frame)
+            .map(|s| s.clone())
+            .unwrap();
 
-            let new_entry = copy.update(milliseconds_since_epoch);
-            self.heap.retain(|x| x.page_id != entry_id);
-            self.heap.push(new_entry);
-        }
-        // otherwise we don't have this page,
-        // we must create an entry and add it
-        else {
-            let new_entry = TimeRingBuffer::from(entry_id, self.k, milliseconds_since_epoch);
-            self.heap.push(new_entry);
-        }
-
-        self.current_pages.insert(entry_id);
+        let new_entry = copy.update(milliseconds_since_epoch);
+        self.heap.retain(|x| x.frame != frame);
+        self.heap.push(new_entry);
     }
 
-    fn find_victim<'a>(&'a mut self, pool: &'a Pool) -> (RwLockWriteGuard<super::Page>, ID) {
+    fn find_victim<'a>(&'a mut self, pool: &'a Pool) -> (RwLockWriteGuard<super::Page>, usize) {
         let buffer = self.heap.pop().unwrap();
-        let buffer_id = buffer.page_id;
+        let frame_idx = buffer.frame;
 
-        let page_idx_mapping = pool.cache.lock().unwrap();
-        let idx = page_idx_mapping.get(&buffer_id).unwrap().clone();
-        drop(page_idx_mapping);
-
-        self.current_pages.remove(&buffer_id);
-        (pool.frames[idx].write().unwrap(), buffer_id)
+        (pool.frames[frame_idx].write().unwrap(), frame_idx)
     }
 }
 
 impl LruK {
     pub fn new(buffer_size: usize, k: usize) -> Self {
         let mut heap = BinaryHeap::new();
-        for _ in 0..buffer_size {
-            let b = TimeRingBuffer::new(0, k);
+        for i in 0..buffer_size {
+            let b = TimeRingBuffer::new(i, k);
             heap.push(b);
         }
-        LruK { heap, current_pages: HashSet::new(), buffer_size, k }
+        LruK { heap, buffer_size, k }
     }
 }
 
@@ -119,14 +103,14 @@ impl PartialEq for TimeRingBuffer {
 impl Eq for TimeRingBuffer {}
 
 impl TimeRingBuffer {
-    fn new(page_id: ID, size: usize) -> Self{
-        TimeRingBuffer { page_id, head: 0, times: vec![0 as u128; size] }
+    fn new(frame: usize, size: usize) -> Self{
+        TimeRingBuffer { frame, head: 0, times: vec![0 as u128; size] }
     }
 
-    fn from(page_id: ID, size: usize, time: u128) -> Self {
+    fn from(frame: usize, size: usize, time: u128) -> Self {
         let mut times = vec![0 as u128; size];
         times[0] = time;
-        TimeRingBuffer { page_id, head: 0, times }
+        TimeRingBuffer { frame, head: 0, times }
     }
 
     fn update(&self, time: u128) -> Self{
