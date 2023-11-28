@@ -1,10 +1,8 @@
 use super::{EvictionStrategy, Pool};
-use std::collections::{HashSet, BinaryHeap};
+use std::collections::BinaryHeap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::sync::RwLockWriteGuard;
 
-type Page = [u8; 4096];
-type ID = u32;
 
 #[derive(Clone, Debug)]
 struct TimeRingBuffer {
@@ -15,8 +13,6 @@ struct TimeRingBuffer {
 
 pub struct LruK {
     heap: BinaryHeap<TimeRingBuffer>,
-    buffer_size: usize,
-    k: usize,
 }
 
 impl EvictionStrategy for LruK {
@@ -56,7 +52,7 @@ impl LruK {
             let b = TimeRingBuffer::new(i, k);
             heap.push(b);
         }
-        LruK { heap, buffer_size, k }
+        LruK { heap }
     }
 }
 

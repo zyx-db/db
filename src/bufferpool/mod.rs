@@ -1,5 +1,5 @@
 pub mod eviction;
-use std::{collections::HashMap, sync::{Arc, RwLock, Mutex, RwLockWriteGuard}};
+use std::{collections::HashMap, sync::{Arc, RwLock, Mutex, RwLockWriteGuard, MutexGuard}};
 use super::utils::bitmap::Bitmap;
 // What does our interface need?
 // we must be able to 
@@ -21,7 +21,7 @@ pub struct Pool {
     // our buffer pool can use a map to track cached pages, and its frame in memory
     cache: Mutex<HashMap<ID, usize>>,
     frames: Vec<RwLock<Page>>,
-    frame_to_id: Vec<ID>,
+    frame_to_id: Vec<Mutex<ID>>,
     dirty: Mutex<Bitmap>,
     pinned: Vec<Mutex<u8>>,
     strategy: Mutex<Box<dyn EvictionStrategy>>,
@@ -49,7 +49,7 @@ impl Pool {
         for _ in 0..capacity {
             frames.push(RwLock::new([10; 4096]));
             pinned.push(Mutex::new(0 as u8));
-            frame_to_id.push(0);
+            frame_to_id.push(Mutex::new(0));
         }
         Pool { 
             cache: Mutex::new(HashMap::new()),
@@ -66,11 +66,12 @@ impl Pool {
         let idx = {
             let cache = self.cache.lock().unwrap();
             if cache.contains_key(&page) {
+                println!("looking for {} in {:?} and found it", page, cache);
                 *cache.get(&page).unwrap()
             }
             else {
-                drop(cache);
-                self.replace_entry(page)
+                println!("couldnt find {} in {:?}", page, cache);
+                self.replace_entry(page, cache)
             }
         };
         PageGuard::new(self, page, idx)
@@ -78,21 +79,30 @@ impl Pool {
 
     // TODO: WE DON'T CURRENTLY FLUSH DIRTY PAGE TO DISK
     // returns what slot is now empty
-    fn replace_entry(&self, new_page_id: ID) -> usize {
+    fn replace_entry(&self, new_page_id: ID, mut cache: MutexGuard<HashMap<u32, usize>>) -> usize {
         // we start by finding the page to remove, and acquire a write lock on it
         let mut strat = self.strategy.lock().unwrap();
         let (mut victim_guard, frame) = strat.find_victim(self);
-        // we also lock the cache, so we can modify it safely
-        let mut cache = self.cache.lock().unwrap();
+        // remove old cached id
+        let frame_to_id_guard = self.frame_to_id[frame].lock().unwrap();
+        let victim_id = *frame_to_id_guard;
+        cache.remove(&victim_id);
+        drop(frame_to_id_guard);
         // update the entry, removing old key and adding new one
         cache.insert(new_page_id, frame);
         
         // replace frame here
-        // TODO: THIS IS WHERE WE MUST FLUSH CHANGES TO DISK
+        // TODO: THIS IS WHERE WE MUST FLUSH CHANGES TO DISK USING DISK MANAGER
+        // if frame is dirty -> flush changes
+        let mut dirty_frames = self.dirty.lock().unwrap();
+        dirty_frames.unset(frame);
+        //
+        // TODO: THIS IS WHERE WE READ FILE USING DISK MANAGER
         // let new_frame: Page = FILE_IO();
         let new_frame = [0; 4096];
         *victim_guard = new_frame;
 
+        eprintln!("put id {} in frame {}, resulting in {:?}", new_page_id, frame, cache);
         drop(victim_guard);
         drop(cache);
         frame

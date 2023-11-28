@@ -16,8 +16,6 @@ currently i'm working on implementing the file io with a buffer pool manager and
 
 ## TODO
 
-currently the LruK has some issues at initialization
-
-it has no "pages" so i can't just pop from the heap to find a victim. currently the way i have that data structure set up, i can't just add dummy pages
-
-this is because the LRU cache is tightly coupled with the Pool's pages. it should not need to know what pages are cached, it should just track the different frames!!!! I need to fix this!!!!
+currently our program crashes if our buffer pool is unable to read in the page
+this happens when all the frames are pinned at once
+potentially will fix by returning option, for time being just make pool size big :skull:
