@@ -19,9 +19,9 @@ use super::utils::bitmap::Bitmap;
 type ID = u32; 
 pub struct Pool {
     // our buffer pool can use a map to track cached pages, and its frame in memory
-    cache: Mutex<HashMap<ID, usize>>,
+    cache: RwLock<HashMap<ID, usize>>,
     frames: Vec<RwLock<Page>>,
-    frame_to_id: Vec<Mutex<ID>>,
+    frame_to_id: Vec<Mutex<Option<ID>>>,
     dirty: Mutex<Bitmap>,
     pinned: Vec<Mutex<u8>>,
     strategy: Mutex<Box<dyn EvictionStrategy>>,
@@ -49,10 +49,10 @@ impl Pool {
         for _ in 0..capacity {
             frames.push(RwLock::new([10; 4096]));
             pinned.push(Mutex::new(0 as u8));
-            frame_to_id.push(Mutex::new(0));
+            frame_to_id.push(Mutex::new(None));
         }
         Pool { 
-            cache: Mutex::new(HashMap::new()),
+            cache: RwLock::new(HashMap::new()),
             frames,
             dirty: Mutex::new(Bitmap::with_capacity(capacity)),
             frame_to_id,
@@ -64,14 +64,22 @@ impl Pool {
     
     pub fn get_page(&self, page: ID) -> PageGuard{
         let idx = {
-            let cache = self.cache.lock().unwrap();
+            let cache = self.cache.read().unwrap();
             if cache.contains_key(&page) {
-                println!("looking for {} in {:?} and found it", page, cache);
+                // eprintln!("looking for {} in {:?} and found it", page, cache);
                 *cache.get(&page).unwrap()
             }
             else {
-                println!("couldnt find {} in {:?}", page, cache);
-                self.replace_entry(page, cache)
+                drop(cache);
+                let write_cache = self.cache.write().unwrap();
+                if write_cache.contains_key(&page) {
+                    // eprintln!("looking for {} in {:?} and found it", page, write_cache);
+                    *write_cache.get(&page).unwrap()
+                }
+                else {
+                    // eprintln!("couldnt find {} in {:?}", page, write_cache);
+                    self.replace_entry(page, write_cache)
+                }
             }
         };
         PageGuard::new(self, page, idx)
@@ -79,14 +87,20 @@ impl Pool {
 
     // TODO: WE DON'T CURRENTLY FLUSH DIRTY PAGE TO DISK
     // returns what slot is now empty
-    fn replace_entry(&self, new_page_id: ID, mut cache: MutexGuard<HashMap<u32, usize>>) -> usize {
+    fn replace_entry(&self, new_page_id: ID, mut cache: RwLockWriteGuard<HashMap<u32, usize>>) -> usize {
         // we start by finding the page to remove, and acquire a write lock on it
         let mut strat = self.strategy.lock().unwrap();
         let (mut victim_guard, frame) = strat.find_victim(self);
         // remove old cached id
-        let frame_to_id_guard = self.frame_to_id[frame].lock().unwrap();
-        let victim_id = *frame_to_id_guard;
-        cache.remove(&victim_id);
+        let mut frame_to_id_guard = self.frame_to_id[frame].lock().unwrap();
+        match *frame_to_id_guard {
+            None => {}
+            Some(victim_id) => {
+                // eprintln!("set to remove {}", victim_id);
+                cache.remove(&victim_id);
+            }
+        }
+        *frame_to_id_guard = Some(new_page_id);
         drop(frame_to_id_guard);
         // update the entry, removing old key and adding new one
         cache.insert(new_page_id, frame);
@@ -102,7 +116,7 @@ impl Pool {
         let new_frame = [0; 4096];
         *victim_guard = new_frame;
 
-        eprintln!("put id {} in frame {}, resulting in {:?}", new_page_id, frame, cache);
+        // eprintln!("put id {} in frame {}, resulting in {:?}", new_page_id, frame, cache);
         drop(victim_guard);
         drop(cache);
         frame
