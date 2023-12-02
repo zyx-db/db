@@ -1,5 +1,5 @@
 pub mod eviction;
-use std::{collections::HashMap, sync::{Arc, RwLock, Mutex, RwLockWriteGuard, MutexGuard}};
+use std::{collections::HashMap, sync::{Arc, RwLock, Mutex, RwLockWriteGuard, MutexGuard}, usize};
 use super::utils::bitmap::Bitmap;
 // What does our interface need?
 // we must be able to 
@@ -65,16 +65,14 @@ impl Pool {
     pub fn get_page(&self, page: ID) -> PageGuard{
         let idx = {
             let cache = self.cache.read().unwrap();
-            if cache.contains_key(&page) {
-                // eprintln!("looking for {} in {:?} and found it", page, cache);
-                *cache.get(&page).unwrap()
+            if let Some(idx) = cache.get(&page) {
+                *idx
             }
             else {
                 drop(cache);
                 let write_cache = self.cache.write().unwrap();
-                if write_cache.contains_key(&page) {
-                    // eprintln!("looking for {} in {:?} and found it", page, write_cache);
-                    *write_cache.get(&page).unwrap()
+                if let Some(idx) = write_cache.get(&page){
+                    *idx
                 }
                 else {
                     // eprintln!("couldnt find {} in {:?}", page, write_cache);
