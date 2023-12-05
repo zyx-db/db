@@ -6,7 +6,7 @@ currently i'm working on implementing the file io with a buffer pool manager and
 
 # goals
 
-- a disk manager to convert the raw bytes in my pages ([u8; 4096]) into meaningful data, and vice versa
+- utilities to convert the raw bytes in my pages ([u8; 4096]) into meaningful data, and vice versa
 - concurrent implementations of data structures used! i hope to make the bulk of my data structures i used throughout this process!
 - b+ tree indexing
 - storing simple data types in user defined schemas (ex. no variable sized data like strings)
