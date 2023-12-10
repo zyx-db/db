@@ -12,13 +12,14 @@ fn main() {
     let strat: Mutex<Box<dyn EvictionStrategy>> = Mutex::new(Box::new(bufferpool::eviction::LruK::new(10, 2)));
     let pool = Arc::new(Pool::new(10, strat));
     let mut threads = Vec::new();
+    const PAGES_COUNT : u32 = 4;
     for i in 1..11 {
         let pool_clone = Arc::clone(&pool);
         let handle = thread::spawn(move || {
-            let guard = pool_clone.get_page(i % 2);
+            let guard = pool_clone.get_page(i % PAGES_COUNT);
             let mut write_guard = guard.write();
             let cur = write_guard[0];
-            println!("got guard for page {}, contents is {:?}", i % 2, cur);
+            println!("got guard for page {}, contents is {:?}", i % PAGES_COUNT, cur);
             *write_guard = Page::from([cur + 1 as u8; 4096]);
             // sleep(Duration::from_secs(1));
             drop(write_guard);
