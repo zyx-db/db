@@ -28,6 +28,7 @@ pub struct Pool {
     dirty: Mutex<Bitmap>,
     pinned: Vec<Mutex<u8>>,
     strategy: Mutex<Box<dyn EvictionStrategy>>,
+    disk: DiskManager
 }
 
 pub type Page = [u8; 4096];
@@ -61,7 +62,8 @@ impl Pool {
             frame_to_id,
             // free: Mutex::new(Bitmap::with_capacity(capacity)),
             pinned,
-            strategy
+            strategy,
+            disk: DiskManager::new()
         }
     }
     
@@ -105,7 +107,8 @@ impl Pool {
                 // thats why its in this match clause
                 let mut dirty_frames = self.dirty.lock().unwrap();
                 if dirty_frames.check(frame){
-                    DiskManager::write(victim_id);
+                    let page_content = self.frames[frame].read().unwrap();
+                    self.disk.write(victim_id,&(*&page_content));
                 }
                 dirty_frames.unset(frame);
             }
@@ -115,8 +118,8 @@ impl Pool {
         // update the entry, removing old key and adding new one
         cache.insert(new_page_id, frame); 
         // TODO: fr read page
-        DiskManager::read(new_page_id);
-        let new_frame = [0; 4096];
+        let new_frame = self.disk.read(new_page_id);
+        // let new_frame = [0; 4096];
         *victim_guard = new_frame;
 
         // eprintln!("put id {} in frame {}, resulting in {:?}", new_page_id, frame, cache);
@@ -177,7 +180,8 @@ impl Drop for Pool {
         for i in 0..dirty_frames.len() {
             let frame_to_id = self.frame_to_id[i].lock().unwrap();
             if dirty_frames.check(i) && frame_to_id.is_some(){
-               DiskManager::write(frame_to_id.unwrap()) 
+                let page_content = self.frames[i].read().unwrap();
+                self.disk.write(frame_to_id.unwrap(), &(*page_content));
             }
         }
     }

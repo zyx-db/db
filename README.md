@@ -39,3 +39,9 @@ currently i'm working on implementing the file io with a buffer pool manager and
 ## General Thoughts
 
  - Should the notion of a "page" that the system interacts with be a raw buffer of bytes, or should it be some interpreted value, given by the disk manager? Essentially should interpreting a page be up to the disk manager or someone else?
+
+# notes
+
+command to make file of 0s:
+
+dd if=/dev/zero of=<output_file> bs=4096 count=<amt_of_pages>
