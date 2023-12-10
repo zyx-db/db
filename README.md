@@ -19,6 +19,7 @@ currently i'm working on figuring out my page format and implementing it, as wel
 ### Disk Manager
 
  - Figure out format for storage on disk
+ - Currently our program crashes if we try and read a page not in the file. Ex: read page 1 with only 4kb in the db.dat file
 
 ### Buffer Pool
 
@@ -40,6 +41,10 @@ currently i'm working on figuring out my page format and implementing it, as wel
  - Should the notion of a "page" that the system interacts with be a raw buffer of bytes, or should it be some interpreted value, given by the disk manager? Essentially should interpreting a page be up to the disk manager or someone else?
 
 # notes
+
+usage from fresh install:
+
+create file with path ./files/db.dat
 
 command to make file of 0s:
 
