@@ -39,6 +39,10 @@ impl Bitmap {
         let mask = 1 << bit;
         (self.data[offset] & mask) == mask
     }
+
+    pub fn len(&self) -> usize {
+        self.capacity
+    }
 }
 
 #[cfg(test)]

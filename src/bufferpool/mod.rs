@@ -173,7 +173,13 @@ impl<'a> Drop for PageGuard<'a> {
 // TODO: we need to write all dirty frames on exit
 impl Drop for Pool {
     fn drop(&mut self) {
-        
+        let dirty_frames = self.dirty.lock().unwrap();
+        for i in 0..dirty_frames.len() {
+            let frame_to_id = self.frame_to_id[i].lock().unwrap();
+            if dirty_frames.check(i) && frame_to_id.is_some(){
+               DiskManager::write(frame_to_id.unwrap()) 
+            }
+        }
     }
 }
 
