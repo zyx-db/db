@@ -2,7 +2,7 @@
 
 i'm currently watching through the cmu 15-445 lecture series, and wanted to give building a dbms a try!
 
-currently i'm working on implementing the file io with a buffer pool manager and a cache eviction strategy.
+currently i'm working on figuring out my page format and implementing it, as well as how to implement free space management
 
 # goals
 
@@ -19,7 +19,6 @@ currently i'm working on implementing the file io with a buffer pool manager and
 ### Disk Manager
 
  - Figure out format for storage on disk
- - create interface to read and write files
 
 ### Buffer Pool
 
