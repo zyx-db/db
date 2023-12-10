@@ -1,6 +1,9 @@
 pub mod eviction;
 use std::{collections::HashMap, sync::{Arc, RwLock, Mutex, RwLockWriteGuard, MutexGuard}, usize};
+use crate::disk::DiskManager;
+
 use super::utils::bitmap::Bitmap;
+
 // What does our interface need?
 // we must be able to 
 // "get" a page
@@ -96,21 +99,23 @@ impl Pool {
             Some(victim_id) => {
                 // eprintln!("set to remove {}", victim_id);
                 cache.remove(&victim_id);
+                
+                // if frame is dirty -> flush changes
+                // we do not need to do so if this frame did not store a page,
+                // thats why its in this match clause
+                let mut dirty_frames = self.dirty.lock().unwrap();
+                if dirty_frames.check(frame){
+                    DiskManager::write(victim_id);
+                }
+                dirty_frames.unset(frame);
             }
         }
         *frame_to_id_guard = Some(new_page_id);
         drop(frame_to_id_guard);
         // update the entry, removing old key and adding new one
-        cache.insert(new_page_id, frame);
-        
-        // replace frame here
-        // TODO: THIS IS WHERE WE MUST FLUSH CHANGES TO DISK USING DISK MANAGER
-        // if frame is dirty -> flush changes
-        let mut dirty_frames = self.dirty.lock().unwrap();
-        dirty_frames.unset(frame);
-        //
-        // TODO: THIS IS WHERE WE READ FILE USING DISK MANAGER
-        // let new_frame: Page = FILE_IO();
+        cache.insert(new_page_id, frame); 
+        // TODO: fr read page
+        DiskManager::read(new_page_id);
         let new_frame = [0; 4096];
         *victim_guard = new_frame;
 
@@ -162,6 +167,13 @@ impl<'a> Drop for PageGuard<'a> {
         // currently printing for debugging
         // println!("dropped page {}, pin is {}", self.page_id, *pin_count);
         drop(pin_count);
+    }
+}
+
+// TODO: we need to write all dirty frames on exit
+impl Drop for Pool {
+    fn drop(&mut self) {
+        
     }
 }
 

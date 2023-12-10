@@ -1,6 +1,7 @@
 mod bufferpool;
 mod utils;
 mod page_interpretation;
+mod disk;
 use std::{thread::{self}, sync::{Arc, Mutex}};
 
 // use bufferpool::eviction;
