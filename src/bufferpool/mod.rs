@@ -88,7 +88,6 @@ impl Pool {
         PageGuard::new(self, page, idx)
     }
 
-    // TODO: WE DON'T CURRENTLY FLUSH DIRTY PAGE TO DISK
     // returns what slot is now empty
     fn replace_entry(&self, new_page_id: ID, mut cache: RwLockWriteGuard<HashMap<u32, usize>>) -> usize {
         // we start by finding the page to remove, and acquire a write lock on it
@@ -117,7 +116,6 @@ impl Pool {
         drop(frame_to_id_guard);
         // update the entry, removing old key and adding new one
         cache.insert(new_page_id, frame); 
-        // TODO: fr read page
         let new_frame = self.disk.read(new_page_id);
         // let new_frame = [0; 4096];
         *victim_guard = new_frame;
@@ -173,7 +171,6 @@ impl<'a> Drop for PageGuard<'a> {
     }
 }
 
-// TODO: we need to write all dirty frames on exit
 impl Drop for Pool {
     fn drop(&mut self) {
         let dirty_frames = self.dirty.lock().unwrap();

@@ -40,6 +40,8 @@ currently i'm working on figuring out my page format and implementing it, as wel
 
  - Should the notion of a "page" that the system interacts with be a raw buffer of bytes, or should it be some interpreted value, given by the disk manager? Essentially should interpreting a page be up to the disk manager or someone else?
 
+ - For our BTree when we need a new node, we need to get a new page. Likewise, we need to delete our page when removing a node. The disk manager's new / delete page interface is essentially the dynamic memory allocation for our data structures.
+
 # notes
 
 usage from fresh install:
