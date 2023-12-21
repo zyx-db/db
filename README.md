@@ -2,7 +2,7 @@
 
 i'm currently watching through the cmu 15-445 lecture series, and wanted to give building a dbms a try!
 
-currently i'm working on figuring out my page format and implementing it, as well as how to implement free space management
+currently i'm working on figuring out my page format and implementing it, as well as implementing the BTree structure
 
 # goals
 
@@ -14,11 +14,10 @@ currently i'm working on figuring out my page format and implementing it, as wel
 - parsing requests (using a subset of sql for simplicity's sake)
 - query execution (likely no optimization)
 
-## TODO
+## remaining work
 
 ### Disk Manager
 
- - Figure out format for storage on disk
  - Currently our program crashes if we try and read a page not in the file. Ex: read page 1 with only 4kb in the db.dat file
 
 ### Buffer Pool
@@ -43,6 +42,8 @@ currently i'm working on figuring out my page format and implementing it, as wel
  - For our BTree when we need a new node, we need to get a new page. Likewise, we need to delete our page when removing a node. The disk manager's new / delete page interface is essentially the dynamic memory allocation for our data structures.
 
 # notes
+
+TODO create script to generate a fresh database file
 
 usage from fresh install:
 
