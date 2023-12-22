@@ -60,10 +60,21 @@ impl Pool {
             frames,
             dirty: Mutex::new(Bitmap::with_capacity(capacity)),
             frame_to_id,
-            // free: Mutex::new(Bitmap::with_capacity(capacity)),
             pinned,
             strategy,
             disk: DiskManager::new()
+        }
+    }
+
+    pub fn new_page(&self) -> Option<(ID, PageGuard)>{
+        let possible_page_id = self.disk.new_page();
+        if possible_page_id.is_none(){
+            return None;
+        }
+        else {
+            let new_page_id = possible_page_id.unwrap();
+            let page_guard = self.get_page(new_page_id);
+            return Some((new_page_id, page_guard));
         }
     }
     

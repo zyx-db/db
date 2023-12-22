@@ -63,7 +63,7 @@ impl DiskManager {
         for i in 4..4096 {
             let cur = data[i];
             for bit in 0..8 {
-                let map_offset = (i * 8) + bit;
+                let map_offset = ((i - 4) * 8) + bit;
                 if cur & (1 << bit) == (1 << bit){
                     map.set(map_offset); 
                 }
@@ -100,9 +100,10 @@ impl DiskManager {
         // find next empty page, just linear scan
         let mut map = self.map.lock().unwrap();
         let mut capacity = self.capacity.lock().unwrap();
-        let mut used = self.capacity.lock().unwrap();
+        let mut used = self.used.lock().unwrap();
 
         // add new pages
+        eprintln!("capacity: {}, used: {}", *capacity, *used);
         if *capacity == *used {
             if *capacity == 4096 * 8 {
                 return None
@@ -154,6 +155,7 @@ impl DiskManager {
         data[3] = used2;
 
         let map = self.map.lock().unwrap();
+
         for i in 4..4096 {
             for bit in 0..8 {
                 let cur = ((i - 4) * 8) + bit;
