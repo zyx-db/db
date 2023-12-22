@@ -24,5 +24,5 @@ Master Table {
     root page: INT (the page for the root node of the tree)
 }
 
-This tree will be indexed on the "name" field.
+This tree will be indexed on the "table name" field.
 It is used to find where a tree is on disk, as well as verifying existence.
