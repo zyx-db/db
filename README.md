@@ -16,6 +16,12 @@ currently i'm working on figuring out my page format and implementing it, as wel
 
 ## remaining work
 
+### Metadata
+
+ - create script to generate a fresh database file
+
+ - we can store table info in a "master_table" BTree. The root node for this table can be on a consistent page, ex page 1.
+
 ### Disk Manager
 
  - Currently our program crashes if we try and read a page not in the file. Ex: read page 1 with only 4kb in the db.dat file
@@ -42,8 +48,6 @@ currently i'm working on figuring out my page format and implementing it, as wel
  - For our BTree when we need a new node, we need to get a new page. Likewise, we need to delete our page when removing a node. The disk manager's new / delete page interface is essentially the dynamic memory allocation for our data structures.
 
 # notes
-
-TODO create script to generate a fresh database file
 
 usage from fresh install:
 
