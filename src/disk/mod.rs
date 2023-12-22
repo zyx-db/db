@@ -6,7 +6,7 @@ use std::io::{self, SeekFrom};
 use std::io::prelude::*;
 use std::fs::{File, OpenOptions};
 
-const SPECIAL_PAGES: u32 = 1;
+const SPECIAL_PAGES: u32 = 4;
 
 fn merge_u8(first: u8, second: u8) -> u16 {
     (first as u16) << 8 | (second as u16)
@@ -59,13 +59,29 @@ impl DiskManager {
         let used = merge_u8(data[2], data[3]);
 
         // read remaining page and populate bitmap
-        let mut map = Bitmap::with_capacity(4092 * 8);
+        let mut map = Bitmap::with_capacity(4092 * 8 + (4096 * 8 * 3));
         for i in 4..4096 {
             let cur = data[i];
             for bit in 0..8 {
                 let map_offset = ((i - 4) * 8) + bit;
                 if cur & (1 << bit) == (1 << bit){
                     map.set(map_offset); 
+                }
+            }
+        }
+
+        for page in 0..3 {
+            f.read_exact(&mut data).unwrap();
+            let initial_offset = 4092 * 8;
+            let added_offset = (4096 * 8) * page;
+            for i in 0..4096 {
+                let cur = data[i];
+                for bit in 0..8 {
+                    let current_offset = (i * 8) + bit;
+                    let map_offset = current_offset + initial_offset + added_offset;
+                    if cur & (1 << bit) == (1 << bit){
+                        map.set(map_offset); 
+                    }     
                 }
             }
         }
