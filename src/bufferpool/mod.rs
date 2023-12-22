@@ -1,25 +1,29 @@
 pub mod eviction;
-use std::{collections::HashMap, sync::{Arc, RwLock, Mutex, RwLockWriteGuard, MutexGuard}, usize};
 use crate::disk::DiskManager;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex, MutexGuard, RwLock, RwLockWriteGuard},
+    usize,
+};
 
 use super::utils::bitmap::Bitmap;
 
 // What does our interface need?
-// we must be able to 
+// we must be able to
 // "get" a page
 // "pin" a page during read/write
 //
 // ideally there is some form of 'ownership'
-// i can apply such that all pages in use 
+// i can apply such that all pages in use
 // are automatically "pinned"
 //
 // We must also implement some sort of cache eviction strategy
-// ideally i should implement this using composition, 
+// ideally i should implement this using composition,
 // such that our pool contains a "eviction" strategy object that tracks usages
 //
-// TODO: create lock ordering to prevent silly mistakes 
+// TODO: create lock ordering to prevent silly mistakes
 
-type ID = u32; 
+type ID = u32;
 pub struct Pool {
     // our buffer pool can use a map to track cached pages, and its frame in memory
     cache: RwLock<HashMap<ID, usize>>,
@@ -28,7 +32,7 @@ pub struct Pool {
     dirty: Mutex<Bitmap>,
     pinned: Vec<Mutex<u8>>,
     strategy: Mutex<Box<dyn EvictionStrategy>>,
-    disk: DiskManager
+    disk: DiskManager,
 }
 
 pub type Page = [u8; 4096];
@@ -55,42 +59,39 @@ impl Pool {
             pinned.push(Mutex::new(0 as u8));
             frame_to_id.push(Mutex::new(None));
         }
-        Pool { 
+        Pool {
             cache: RwLock::new(HashMap::new()),
             frames,
             dirty: Mutex::new(Bitmap::with_capacity(capacity)),
             frame_to_id,
             pinned,
             strategy,
-            disk: DiskManager::new()
+            disk: DiskManager::new(),
         }
     }
 
-    pub fn new_page(&self) -> Option<(ID, PageGuard)>{
+    pub fn new_page(&self) -> Option<(ID, PageGuard)> {
         let possible_page_id = self.disk.new_page();
-        if possible_page_id.is_none(){
+        if possible_page_id.is_none() {
             return None;
-        }
-        else {
+        } else {
             let new_page_id = possible_page_id.unwrap();
             let page_guard = self.get_page(new_page_id);
             return Some((new_page_id, page_guard));
         }
     }
-    
-    pub fn get_page(&self, page: ID) -> PageGuard{
+
+    pub fn get_page(&self, page: ID) -> PageGuard {
         let idx = {
             let cache = self.cache.read().unwrap();
             if let Some(idx) = cache.get(&page) {
                 *idx
-            }
-            else {
+            } else {
                 drop(cache);
                 let write_cache = self.cache.write().unwrap();
-                if let Some(idx) = write_cache.get(&page){
+                if let Some(idx) = write_cache.get(&page) {
                     *idx
-                }
-                else {
+                } else {
                     // eprintln!("couldnt find {} in {:?}", page, write_cache);
                     self.replace_entry(page, write_cache)
                 }
@@ -100,7 +101,11 @@ impl Pool {
     }
 
     // returns what slot is now empty
-    fn replace_entry(&self, new_page_id: ID, mut cache: RwLockWriteGuard<HashMap<u32, usize>>) -> usize {
+    fn replace_entry(
+        &self,
+        new_page_id: ID,
+        mut cache: RwLockWriteGuard<HashMap<u32, usize>>,
+    ) -> usize {
         // we start by finding the page to remove, and acquire a write lock on it
         let mut strat = self.strategy.lock().unwrap();
         let (mut victim_guard, frame) = strat.find_victim(self);
@@ -111,14 +116,14 @@ impl Pool {
             Some(victim_id) => {
                 // eprintln!("set to remove {}", victim_id);
                 cache.remove(&victim_id);
-                
+
                 // if frame is dirty -> flush changes
                 // we do not need to do so if this frame did not store a page,
                 // thats why its in this match clause
                 let mut dirty_frames = self.dirty.lock().unwrap();
-                if dirty_frames.check(frame){
+                if dirty_frames.check(frame) {
                     let page_content = self.frames[frame].read().unwrap();
-                    self.disk.write(victim_id,&(*&page_content));
+                    self.disk.write(victim_id, &(*&page_content));
                 }
                 dirty_frames.unset(frame);
             }
@@ -126,7 +131,7 @@ impl Pool {
         *frame_to_id_guard = Some(new_page_id);
         drop(frame_to_id_guard);
         // update the entry, removing old key and adding new one
-        cache.insert(new_page_id, frame); 
+        cache.insert(new_page_id, frame);
         let new_frame = self.disk.read(new_page_id);
         // let new_frame = [0; 4096];
         *victim_guard = new_frame;
@@ -147,7 +152,11 @@ impl<'a> PageGuard<'a> {
         // println!("picked up page {}, pin is {}", page_id, *pin_count);
         drop(pin_count);
 
-        PageGuard { data: pool, page_id, pool_idx }
+        PageGuard {
+            data: pool,
+            page_id,
+            pool_idx,
+        }
     }
 
     pub fn read(&self) -> Page {
@@ -187,7 +196,7 @@ impl Drop for Pool {
         let dirty_frames = self.dirty.lock().unwrap();
         for i in 0..dirty_frames.len() {
             let frame_to_id = self.frame_to_id[i].lock().unwrap();
-            if dirty_frames.check(i) && frame_to_id.is_some(){
+            if dirty_frames.check(i) && frame_to_id.is_some() {
                 let page_content = self.frames[i].read().unwrap();
                 self.disk.write(frame_to_id.unwrap(), &(*page_content));
             }

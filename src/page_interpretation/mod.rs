@@ -12,7 +12,6 @@ pub enum TupleField {
     SignedInt(i32),
     Double(f32),
     Char(char),
-    Text256([char;256]),
+    Text256([char; 256]),
     Bool(bool),
 }
-

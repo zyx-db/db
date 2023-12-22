@@ -1,8 +1,7 @@
 use super::{EvictionStrategy, Pool};
 use std::collections::BinaryHeap;
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::sync::RwLockWriteGuard;
-
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Debug)]
 struct TimeRingBuffer {
@@ -19,14 +18,17 @@ impl EvictionStrategy for LruK {
     fn update_entry(&mut self, frame: usize) {
         let current_time = SystemTime::now();
         // Calculate the duration since the Unix epoch
-        let duration_since_epoch = current_time.duration_since(UNIX_EPOCH).expect("Time went backwards");
+        let duration_since_epoch = current_time
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards");
         // Convert the duration to milliseconds
         let milliseconds_since_epoch = duration_since_epoch.as_millis();
 
         // we have the this frame, lets find the entry
         // from there we can create a new, updated entry
         // we have to remove old entry, and insert new one
-        let copy = self.heap
+        let copy = self
+            .heap
             .iter()
             .find(|x| x.frame == frame)
             .map(|s| s.clone())
@@ -70,7 +72,7 @@ impl Ord for TimeRingBuffer {
             if second > first {
                 return std::cmp::Ordering::Less;
             }
-        } 
+        }
 
         std::cmp::Ordering::Equal
     }
@@ -85,7 +87,7 @@ impl PartialOrd for TimeRingBuffer {
 impl PartialEq for TimeRingBuffer {
     fn eq(&self, other: &Self) -> bool {
         let size = self.times.len();
-        for offset in 1..size+1 {
+        for offset in 1..size + 1 {
             let i = (self.head + offset) % size;
             let j = (other.head + offset) % size;
             if self.times[i] != other.times[j] {
@@ -99,17 +101,25 @@ impl PartialEq for TimeRingBuffer {
 impl Eq for TimeRingBuffer {}
 
 impl TimeRingBuffer {
-    fn new(frame: usize, size: usize) -> Self{
-        TimeRingBuffer { frame, head: 0, times: vec![0 as u128; size] }
+    fn new(frame: usize, size: usize) -> Self {
+        TimeRingBuffer {
+            frame,
+            head: 0,
+            times: vec![0 as u128; size],
+        }
     }
 
     fn from(frame: usize, size: usize, time: u128) -> Self {
         let mut times = vec![0 as u128; size];
         times[0] = time;
-        TimeRingBuffer { frame, head: 0, times }
+        TimeRingBuffer {
+            frame,
+            head: 0,
+            times,
+        }
     }
 
-    fn update(&self, time: u128) -> Self{
+    fn update(&self, time: u128) -> Self {
         let mut updated = self.clone();
         updated.head = (updated.head + 1) % updated.times.len();
         updated.times[updated.head] = time;

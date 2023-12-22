@@ -1,6 +1,6 @@
-pub struct Bitmap{
+pub struct Bitmap {
     capacity: usize,
-    data: Vec<u64>
+    data: Vec<u64>,
 }
 
 impl Bitmap {
@@ -13,17 +13,20 @@ impl Bitmap {
             }
             s
         };
-        Bitmap { capacity, data: vec![0; size] }
+        Bitmap {
+            capacity,
+            data: vec![0; size],
+        }
     }
 
-    pub fn set(&mut self, idx: usize){
+    pub fn set(&mut self, idx: usize) {
         assert!(idx < self.capacity);
         let offset = idx / 64;
         let bit = idx % 64;
         self.data[offset] |= 1 << bit;
     }
 
-    pub fn unset(&mut self, idx: usize){
+    pub fn unset(&mut self, idx: usize) {
         assert!(idx < self.capacity);
         let offset = idx / 64;
         let bit = idx % 64;
@@ -51,7 +54,7 @@ mod tests {
 
     #[test]
     fn set() {
-        let mut map = Bitmap::with_capacity(32);  
+        let mut map = Bitmap::with_capacity(32);
         assert_eq!(map.check(0), false);
         map.set(0);
         assert_eq!(map.check(0), true);
@@ -59,10 +62,10 @@ mod tests {
 
     #[test]
     fn size_1() {
-        let map = Bitmap::with_capacity(64);  
+        let map = Bitmap::with_capacity(64);
         assert_eq!(map.data.len(), 1 as usize);
     }
-    
+
     #[test]
     fn size_big() {
         let map = Bitmap::with_capacity(256);
@@ -71,7 +74,7 @@ mod tests {
 
     #[test]
     fn size_awk() {
-        let map = Bitmap::with_capacity(100);  
+        let map = Bitmap::with_capacity(100);
         assert_eq!(map.data.len(), 2 as usize);
     }
 
@@ -84,7 +87,7 @@ mod tests {
     }
 
     #[test]
-    fn unset(){
+    fn unset() {
         let mut map = Bitmap::with_capacity(1);
         map.set(0);
         map.unset(0);
