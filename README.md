@@ -22,10 +22,6 @@ currently i'm working on figuring out my page format and implementing it, as wel
 
  - we can store table info in a "master_table" BTree. The root node for this table can be on a consistent page, ex page 1.
 
-### Disk Manager
-
- - Currently our program crashes if we try and read a page not in the file. Ex: read page 1 with only 4kb in the db.dat file
-
 ### Buffer Pool
 
  - currently our program crashes if our buffer pool is unable to read in the page
