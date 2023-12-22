@@ -4,7 +4,7 @@ pub enum TupleFieldTypes {
     DOUBLE,
     CHAR,
     TEXT256,
-    BOOL
+    BOOL,
 }
 
 pub enum TupleField {
@@ -13,5 +13,6 @@ pub enum TupleField {
     Double(f32),
     Char(char),
     Text256([char;256]),
-    Bool(bool)
+    Bool(bool),
 }
+

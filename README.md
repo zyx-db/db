@@ -35,6 +35,8 @@ currently i'm working on figuring out my page format and implementing it, as wel
 ### Indexing
 
  - Create Hash Map Index and B+ Tree Indexing schemes
+ - The Primary Key / Clustered B+Tree will have the data records at the leaf
+ - The Secondary Key / Unclustered B+Trees will have the primary keys at the leaf. This means we have to drill 2 trees to lookup a record.
 
 ### Query Execution
 
