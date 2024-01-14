@@ -122,6 +122,7 @@ impl DiskManager {
             if *capacity == 4096 * 8 {
                 return None;
             }
+            // add 64 pages at a time, capped at 4096 * 8 pages
             let new_capacity = min(*capacity + 64, 4096 * 8);
             let added_pages = new_capacity - *capacity;
             *capacity = new_capacity;
