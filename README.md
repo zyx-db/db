@@ -51,6 +51,12 @@ usage from fresh install:
 
 create file with path ./files/db.dat
 
-command to make file of 0s:
+## python script
 
-dd if=/dev/zero of=<output_file> bs=4096 count=<amt_of_pages>
+'''python3 ./scripts/create_db.py ./files/db.dat'''
+
+this script is recommended for use, as initial file format may change in the future, and will be updated here
+
+## bash command to make file of 0s:
+
+'''dd if=/dev/zero of=<output_file> bs=4096 count=<amt_of_pages>'''
